@@ -216,44 +216,48 @@ const Profile = () => {
     setUser({ ...user, profileImage: '' });
   };
 
-  const exportData = (format) => {
-    const exportData = {
-      user: user,
-      financialData: financialData,
-      achievements: achievements,
-      settings: settings
-    };
+  const exportData = async (format) => {
+  // Get the logged-in user's username (or identifier)
+  const username = localStorage.getItem('username');
 
-    if (format === 'csv') {
-      const csvData = [
-        ['Field', 'Value'],
-        ...Object.entries(user).map(([key, value]) => [key, value]),
-        ...Object.entries(financialData).map(([key, value]) => [key, value]),
-      ];
-      const csvContent = csvData.map(row => row.join(',')).join('\n');
-      const blob = new Blob([csvContent], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'profile_data.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-    } else if (format === 'excel') {
-      const csvData = [
-        ['Field', 'Value'],
-        ...Object.entries(user).map(([key, value]) => [key, value]),
-        ...Object.entries(financialData).map(([key, value]) => [key, value]),
-      ];
-      const csvContent = csvData.map(row => row.join(',')).join('\n');
-      const blob = new Blob([csvContent], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'profile_data.xlsx';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
-  };
+  // Fetch expenses for this user from backend
+  let expenses = [];
+  try {
+    const res = await axios.get(`http://localhost:5000/api/expenses/user/${encodeURIComponent(username)}`);
+    expenses = res.data; // Should be an array of {category, amount, date}
+  } catch (err) {
+    alert('Failed to fetch expenses for export.');
+    return;
+  }
+
+  // Prepare rows: Category, Amount, Date
+  const csvData = [
+    ['Category', 'Amount', 'Date']
+  ];
+  let overallTotal = 0;
+
+  expenses.forEach(exp => {
+    csvData.push([
+      exp.category,
+      `₹${Number(exp.amount).toFixed(2)}`,
+      exp.date ? new Date(exp.date).toLocaleDateString() : ''
+    ]);
+    overallTotal += Number(exp.amount);
+  });
+
+  // Add overall total row
+  csvData.push(['Overall Total', `₹${overallTotal.toFixed(2)}`, '']);
+
+  const csvContent = csvData.map(row => row.join(',')).join('\n');
+  const blob = new Blob([csvContent], { type: format === 'csv' ? 'text/csv' : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = format === 'csv' ? 'categories_data.csv' : 'categories_data.xlsx';
+  a.click();
+  URL.revokeObjectURL(url);
+  return;
+};
 
   const getMembershipBadge = () => {
     switch(user.membershipLevel) {
@@ -398,7 +402,7 @@ const Profile = () => {
                         </div>
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Phone</label>
+                        <label className="form-label">Phone<span style={{color: 'red'}}>*</span></label>
                         <div className="input-container">
                           <Phone className="input-icon" />
                           <input
@@ -406,12 +410,13 @@ const Profile = () => {
                             value={user.phone}
                             onChange={handleInputChange}
                             className="form-input"
-                            placeholder="Enter your phone"
+                            readOnly
+                            required
                           />
                         </div>
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Address</label>
+                        <label className="form-label">Address<span style={{color: 'red'}}>*</span></label>
                         <div className="input-container">
                           <MapPin className="input-icon" />
                           <textarea
@@ -421,11 +426,12 @@ const Profile = () => {
                             className="form-textarea"
                             placeholder="Enter your address"
                             rows="2"
+                            required
                           />
                         </div>
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Annual Savings Amount (₹)</label>
+                        <label className="form-label">Annual Savings Amount (₹)<span style={{color: 'red'}}>*</span></label>
                         <div className="input-container">
                           <input
                             name="annualSavingsAmount"
@@ -434,6 +440,8 @@ const Profile = () => {
                             onChange={handleInputChange}
                             className="form-input"
                             placeholder="Enter annual savings amount"
+                            required
+                            min={1}
                           />
                         </div>
                       </div>
@@ -462,7 +470,7 @@ const Profile = () => {
                         />
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Date of Birth</label>
+                        <label className="form-label">Date of Birth<span style={{color: 'red'}}>*</span></label>
                         <div className="input-container">
                           <Calendar className="input-icon" />
                           <input
@@ -471,11 +479,12 @@ const Profile = () => {
                             value={user.dateOfBirth}
                             onChange={handleInputChange}
                             className="form-input"
+                            required
                           />
                         </div>
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Monthly Income (₹)</label>
+                        <label className="form-label">Monthly Income (₹)<span style={{color: 'red'}}>*</span></label>
                         <div className="input-container">
                           <input
                             name="monthlyIncome"
@@ -483,7 +492,23 @@ const Profile = () => {
                             value={user.monthlyIncome}
                             onChange={handleInputChange}
                             className="form-input"
-                            placeholder="Enter monthly income"
+                            readOnly
+                            required
+                            min={1}
+                          />
+                        </div>
+                      </div>
+                      <div className="form-group">
+                        <label className="form-label">Date of Joining<span style={{color: 'red'}}>*</span></label>
+                        <div className="input-container">
+                          <Calendar className="input-icon" />
+                          <input
+                            name="joinDate"
+                            type="date"
+                            value={user.joinDate}
+                            onChange={handleInputChange}
+                            className="form-input"
+                            required
                           />
                         </div>
                       </div>
@@ -499,12 +524,13 @@ const Profile = () => {
                         />
                       </div>
                       <div className="form-group">
-                        <label className="form-label">Membership Level</label>
+                        <label className="form-label">Membership Level<span style={{color: 'red'}}>*</span></label>
                         <select
                           name="membershipLevel"
                           value={user.membershipLevel}
                           onChange={handleInputChange}
                           className="form-select"
+                          required
                         >
                           <option value="Basic">Basic</option>
                           <option value="Premium">Premium</option>
@@ -530,6 +556,7 @@ const Profile = () => {
                         { icon: DollarSign, label: 'Annual Savings Amount', value: user.annualSavingsAmount ? `₹${user.annualSavingsAmount.toLocaleString()}` : '' },
                         { icon: Briefcase, label: 'Occupation', value: user.occupation },
                         { icon: Calendar, label: 'Date of Birth', value: user.dateOfBirth },
+                        { icon: Calendar, label: 'Date of Joining', value: user.joinDate },
                         { icon: DollarSign, label: 'Monthly Income', value: user.monthlyIncome ? `₹${user.monthlyIncome.toLocaleString()}` : '' },
                       ].map(({ icon: Icon, label, value }) => (
                         <div key={label} className="info-item">

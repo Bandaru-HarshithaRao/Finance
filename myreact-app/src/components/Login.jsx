@@ -34,6 +34,9 @@ function Login() {
 
         setMessage('✅ Login successful! Redirecting...');
         localStorage.setItem('userEmail', data.email);
+        localStorage.setItem('userName', data.fullName); // or data.name, depending on your backend
+        localStorage.setItem('userPhone', data.phoneNumber); // or data.phone
+        localStorage.setItem('userMonthlyIncome', data.monthlyIncome);
         // Small delay to show success message
         setTimeout(() => {
           navigate('/'); // Redirect to home page

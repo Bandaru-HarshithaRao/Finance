@@ -70,11 +70,26 @@ app.post('/login', async (req, res) => {
     if (!user || user.password !== password) {
       return res.status(401).json({ message: 'Invalid username or password' });
     }
+
+    const existingProfile = await UserProfile.findOne({ email: user.email });
+    if (!existingProfile) {
+      await UserProfile.create({
+        userId: user._id,
+        name: user.fullName,
+        email: user.email,
+        phone: String(user.phoneNumber),
+        monthlyIncome: user.monthlyIncome,
+    // You can add other default fields here if needed
+  });
+}
     
     res.status(200).json({ 
       message: 'Login successful',
       username: user.username,
-      email :user.email  // Return username for frontend to store
+      email :user.email,  // Return username for frontend to store
+      fullName: user.fullName,
+      phoneNumber: user.phoneNumber,
+      monthlyIncome: user.monthlyIncome
     });
   } catch (error) {
     console.error("Login error:", error.message);
@@ -399,6 +414,14 @@ app.put('/api/expenses/category/:identifier/:oldCategory', async (req, res) => {
   } catch (error) {
     console.error("Update category name error:", error.message);
     res.status(500).json({ error: 'Failed to update category name' });
+  }
+});
+app.get('/api/expenses/user/:username', async (req, res) => {
+  try {
+    const expenses = await Expenses.find({ username: req.params.username });
+    res.json(expenses);
+  } catch (err) {
+    res.status(500).json({ error: 'Failed to fetch expenses' });
   }
 });
 // Add these new routes to your existing server.js file
