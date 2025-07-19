@@ -157,6 +157,110 @@ app.get('/api/expenses/:identifier', async (req, res) => {
   }
 });
 
+// GET total expenses for today for a user
+
+app.get('/api/expenses/today/:identifier', async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const username = await getUsernameFromIdentifier(identifier);
+
+    if (!username) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const start = new Date();
+    start.setHours(0, 0, 0, 0);
+
+    const end = new Date();
+    end.setHours(23, 59, 59, 999);
+
+    const totalToday = await Expenses.aggregate([
+      {
+        $match: {
+          username,
+          date: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    const totalSpent = totalToday.length > 0 ? totalToday[0].totalAmount : 0;
+
+    res.status(200).json({ totalSpent });
+  } catch (error) {
+    console.error("Get today's expenses error:", error.message);
+    res.status(500).json({ error: "Failed to fetch today's expenses" });
+  }
+});
+
+// New API endpoint to get total expenses for current month for a user
+app.get('/api/expenses/month/:identifier', async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const username = await getUsernameFromIdentifier(identifier);
+
+    if (!username) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), 1);
+    const end = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59, 999);
+
+    const totalMonth = await Expenses.aggregate([
+      {
+        $match: {
+          username,
+          date: { $gte: start, $lte: end }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalAmount: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    const totalSpent = totalMonth.length > 0 ? totalMonth[0].totalAmount : 0;
+
+    res.status(200).json({ totalSpent });
+  } catch (error) {
+    console.error("Get monthly expenses error:", error.message);
+    res.status(500).json({ error: "Failed to fetch monthly expenses" });
+  }
+});
+
+// GET user budget info by username
+app.get('/api/user/budget/:identifier', async (req, res) => {
+  try {
+    const { identifier } = req.params;
+    const user = await User.findOne({
+      $or: [
+        { username: identifier },
+        { email: identifier }
+      ]
+    });
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    res.status(200).json({
+      monthlyIncome: user.monthlyIncome,
+      defaultBudget: user.defaultBudget
+    });
+  } catch (error) {
+    console.error("Get user budget error:", error.message);
+    res.status(500).json({ error: 'Failed to fetch user budget info' });
+  }
+});
+
 // GET expenses by date range for a user
 app.get('/api/expenses/date-range/:identifier', async (req, res) => {
   try {

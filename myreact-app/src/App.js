@@ -32,6 +32,8 @@ import Login from './components/Login.jsx';
 import Register from './components/Register'; // ✅ Add this line
 import Categories from './components/Categories.jsx';
 import Profile from './components/Profile.jsx';
+import Alerts from './components/Alerts.jsx'; // Import Alerts component
+
 function App() {
   return (
     <Router>
@@ -42,6 +44,7 @@ function App() {
         <Route path="/dashboard" element={<Dashboard />} />
         <Route path="/category" element={<Categories />} />
         <Route path="/profile" element={<Profile/>}/>
+        <Route path="/alerts" element={<Alerts />} /> {/* Add Alerts route */}
       </Routes>
     </Router>
   );

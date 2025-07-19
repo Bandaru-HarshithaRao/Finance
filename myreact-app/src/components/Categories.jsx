@@ -13,7 +13,7 @@ import {
 const categoryIcons = {
   Food: <FaUtensils />,
   Bills: <FaBolt />,
-  Travel: <FaPlane />,
+  Travel: <FaPlane />,  
   Shopping: <FaShoppingCart />,
   Health: <FaHeartbeat />,
   Transport: <FaCar />,

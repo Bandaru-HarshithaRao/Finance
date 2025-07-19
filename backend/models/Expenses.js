@@ -28,4 +28,4 @@ const ExpensesSchema = new mongoose.Schema({
 // Create compound index for efficient queries
 ExpensesSchema.index({ username: 1, category: 1 });
 
-module.exports = mongoose.model('Expenses', ExpensesSchema);
+module.exports = mongoose.model('Expenses', ExpensesSchema); 

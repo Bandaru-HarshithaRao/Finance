@@ -15,11 +15,15 @@ const Dashboard = () => {
   const [selectedDate, setSelectedDate] = useState('');
   const [selectedYear, setSelectedYear] = useState(new Date().getFullYear());
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState('');  
   const [totalAmount, setTotalAmount] = useState(0);
   const [pieDataFetched, setPieDataFetched] = useState(false);
   const [barDataFetched, setBarDataFetched] = useState(false);
   const [searchType, setSearchType] = useState('range'); // 'range' or 'single'
+
+  // New state variables for budget alert
+  const [monthlyBudget, setMonthlyBudget] = useState(null);
+  const [monthlySpent, setMonthlySpent] = useState(null);
 
   const userIdentifier = localStorage.getItem('userIdentifier') || 'defaultUser';
   const API_BASE_URL = 'http://localhost:5000/api';
@@ -56,6 +60,27 @@ const Dashboard = () => {
       </text>
     );
   };
+
+  // Fetch monthly budget and monthly spent for alert box
+  useEffect(() => {
+    const fetchBudgetAndSpent = async () => {
+      try {
+        // Fetch user budget info
+        const budgetResponse = await axios.get(`${API_BASE_URL}/user/budget/${userIdentifier}`);
+        const budgetData = budgetResponse.data;
+        setMonthlyBudget(budgetData.defaultBudget || 0);
+
+        // Fetch total spent in current month
+        const spentResponse = await axios.get(`${API_BASE_URL}/expenses/month/${userIdentifier}`);
+        const spentData = spentResponse.data;
+        setMonthlySpent(spentData.totalSpent || 0);
+      } catch (error) {
+        console.error('Error fetching budget or spent data:', error);
+      }
+    };
+
+    fetchBudgetAndSpent();
+  }, [userIdentifier, API_BASE_URL]);
 
   // Custom tooltip for pie chart
   const CustomTooltip = ({ active, payload, label }) => {
@@ -224,7 +249,8 @@ const Dashboard = () => {
       return `No expenses found between ${formatDate(startDate)} and ${formatDate(endDate)}`;
     }
   };
-
+  
+  
   return (
     <>
       <Navbar />
@@ -343,7 +369,7 @@ const Dashboard = () => {
                             <span className="category-name">{item.name}</span>
                           </div>
                           <div className="summary-amounts">
-                            <span className="amount">₹{item.value.toFixed(2)}</span>
+                            <span className="amount" style={{ fontSize: '14px', fontWeight: '600', color: '#333' }}>₹{item.value.toFixed(2)}</span>
                             <span className="percentage">({item.percentage.toFixed(1)}%)</span>
                           </div>
                         </div>
@@ -360,10 +386,28 @@ const Dashboard = () => {
             <div className="alert-box">
               <h4>🔶 Budget Alert</h4>
               <p>Track your spending patterns and stay within budget!</p>
-              {totalAmount > 0 && (
-                <p><strong>Current Period Total: ₹{totalAmount.toFixed(2)}</strong></p>
+          {totalAmount > 0 && (
+            <p><strong>Current Period Total: ₹{totalAmount.toFixed(2)}</strong></p>
+          )}
+
+          {/* New budget alert messages */}
+          {monthlyBudget !== null && monthlySpent !== null && (
+            <>
+              {monthlySpent > 0.5 * monthlyBudget ? (
+                <p style={{ color: 'red', fontWeight: 'bold' }}>
+                  ⚠️ Alert: You have spent more than 50% of your monthly budget!
+                </p>
+              ) : (
+                <p style={{ color: 'green', fontWeight: 'bold' }}>
+                  👍 Good job! You have spent less than 50% of your monthly budget.
+                </p>
               )}
-            </div>
+              <p><strong>Monthly Budget: ₹{monthlyBudget.toFixed(2)}</strong></p>
+              <p><strong>Spent This Month: ₹{monthlySpent.toFixed(2)}</strong></p>
+            </>
+          )}
+
+        </div>
           </div>
 
           <div className="bar-chart-section">
