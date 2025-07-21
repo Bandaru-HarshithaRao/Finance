@@ -1,4 +1,4 @@
-import { Award, Bell, Briefcase, Calendar, Camera, DollarSign, Edit3, Mail, MapPin, Phone, Save, Star, Target, User, Smartphone, Download } from 'lucide-react';
+import { Award, Bell, Briefcase, Calendar, Camera, DollarSign, Edit3, Mail, MapPin, Phone, Save, Star, Target, User, Smartphone, Download, CheckCircle, Trophy } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import Navbar from './Navbar';
 import './Profile.css';
@@ -10,7 +10,7 @@ const Profile = () => {
     name: '',
     email: '',
     phone: '',
-    address: '',
+    address: '', 
     annualSavingsAmount: 0,
     occupation: '',
     profileImage: '',
@@ -28,7 +28,7 @@ const Profile = () => {
   const [dataLoaded, setDataLoaded] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
 
-  // Settings state
+  // Settings state - Default to enabled for new users
   const [settings, setSettings] = useState({
     emailNotifications: true,
     mobileNotifications: true,
@@ -44,11 +44,48 @@ const Profile = () => {
 
   // Only these four badges, all start as not earned
   const [achievements, setAchievements] = useState([
-    { id: 1, title: 'Savings Champion', description: 'Maintained 60%+ savings rate for 6 months', icon: '🏆', earned: false },
-    { id: 2, title: 'Budget Master', description: 'Stayed within budget for 12 consecutive months', icon: '📊', earned: false },
-    { id: 3, title: 'Goal Achiever', description: 'Reached 90% of annual savings goal', icon: '🎯', earned: false },
-    { id: 4, title: 'First Month', description: 'Completed your first month on Wealth Pulse!', icon: '🌟', earned: false },
-  ]);
+  {
+    id: 1,
+    title: "First Login",
+    description: "Earned on your first day of login.",
+    earned: false,
+    icon: "🎉"
+  },
+  {
+    id: 2,
+    title: "Day 1 Completed",
+    description: "Unlocked after completing your first day.",
+    earned: false,
+    icon: "✅"
+  },
+  {
+    id: 3,
+    title: "Expense Tracker Beginner",
+    description: "Add your first expense to earn this badge.",
+    earned: false,
+    icon: "💰"
+  },
+  {
+    id: 4,
+    title: "Budget Master",
+    description: "Set your first budget to unlock this badge.",
+    earned: false,
+    icon: "📊"
+  },
+  {
+    id: 5,
+    title: "Finance Streak",
+    description: "Log in for 7 consecutive days.",
+    earned: false,
+    icon: "🔥"
+  }
+]);
+const earnedBadges = achievements.filter(a => a.earned);
+const lockedBadges = achievements.filter(a => !a.earned);
+
+
+  const [budgetProgress, setBudgetProgress] = useState(0);
+  const [budgetMonths, setBudgetMonths] = useState(0);
 
   // Load data from backend and localStorage on component mount
   useEffect(() => {
@@ -85,9 +122,188 @@ const Profile = () => {
     // eslint-disable-next-line
   }, [settings, dataLoaded]);
 
+  // Check and update achievements based on user data
+  useEffect(() => {
+    if (dataLoaded) {
+      calculateBudgetProgress();
+      checkAndUpdateAchievements();
+    }
+    // eslint-disable-next-line
+  }, [user, financialData, dataLoaded]);
+
+  useEffect(() => {
+    const fetchTotalCategoryExpenses = async () => {
+      const username = localStorage.getItem('username');
+      if (!username) return;
+      try {
+        const res = await axios.get(`http://localhost:5000/api/expenses/user/${encodeURIComponent(username)}`);
+        // Group expenses by month for the current year
+        const currentYear = new Date().getFullYear();
+        const monthlyTotals = {};
+        res.data
+          .filter(exp => new Date(exp.date).getFullYear() === currentYear)
+          .forEach(exp => {
+            const date = new Date(exp.date);
+            const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+            monthlyTotals[key] = (monthlyTotals[key] || 0) + Number(exp.amount);
+          });
+        // Calculate total savings as sum of (monthlyIncome - monthlyExpenses) for each month
+        const monthlyIncome = user.monthlyIncome || 0;
+        let totalSavings = 0;
+        let totalExpensesAllMonths = 0;
+        Object.values(monthlyTotals).forEach(monthlyExpense => {
+          totalSavings += (monthlyIncome - monthlyExpense);
+          totalExpensesAllMonths += monthlyExpense;
+        });
+        setFinancialData(prev => ({
+          ...prev,
+          totalCategoryExpenses: totalExpensesAllMonths,
+          totalSavings: totalSavings
+        }));
+      } catch (err) {
+        setFinancialData(prev => ({ ...prev, totalCategoryExpenses: 0, totalSavings: 0 }));
+      }
+    };
+    fetchTotalCategoryExpenses();
+  }, [user]);
+
   const checkLoginStatus = () => {
     const hasBasicInfo = localStorage.getItem('userName') || localStorage.getItem('userEmail');
     setIsLoggedIn(!!hasBasicInfo);
+  };
+
+  // Function to check and update achievements based on user data
+  const checkAndUpdateAchievements = async () => {
+    const updatedAchievements = [...achievements];
+    let hasUpdates = false;
+
+    // Get user expenses for achievement calculations
+    const username = localStorage.getItem('username');
+    let userExpenses = [];
+    try {
+      if (username) {
+        const res = await axios.get(`http://localhost:5000/api/expenses/user/${encodeURIComponent(username)}`);
+        userExpenses = res.data || [];
+      }
+    } catch (err) {
+      console.log('Could not fetch expenses for achievement calculation');
+    }
+
+    // Check Expense Tracker Beginner badge (id 3, index 2)
+    const expenseTrackerBadgeIndex = achievements.findIndex(a => a.title === "Expense Tracker Beginner");
+    if (expenseTrackerBadgeIndex !== -1) {
+      if (userExpenses.length > 0 && !updatedAchievements[expenseTrackerBadgeIndex].earned) {
+        updatedAchievements[expenseTrackerBadgeIndex].earned = true;
+        hasUpdates = true;
+      } else if (userExpenses.length === 0 && updatedAchievements[expenseTrackerBadgeIndex].earned) {
+        updatedAchievements[expenseTrackerBadgeIndex].earned = false;
+        hasUpdates = true;
+      }
+    }
+
+    // Unlock Day 1 Completed badge if one day has passed since joinDate
+    const day1BadgeIndex = achievements.findIndex(a => a.title === "Day 1 Completed");
+    if (day1BadgeIndex !== -1 && user.joinDate) {
+      const joinDate = new Date(user.joinDate);
+      const now = new Date();
+      const diffTime = now - joinDate;
+      const diffDays = diffTime / (1000 * 60 * 60 * 24);
+      if (diffDays >= 1 && !updatedAchievements[day1BadgeIndex].earned) {
+        updatedAchievements[day1BadgeIndex].earned = true;
+        hasUpdates = true;
+      }
+    }
+
+    // Group expenses by month
+    const monthlyTotals = {};
+    userExpenses.forEach((exp) => {
+      const date = new Date(exp.date);
+      const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+      monthlyTotals[key] = (monthlyTotals[key] || 0) + Number(exp.amount);
+    });
+
+    // Assume monthlyBudget is 80% of monthlyIncome if not set
+    const monthlyBudget = user.monthlyBudget || user.monthlyIncome * 0.8;
+    let monthsWithinBudget = 0;
+    Object.values(monthlyTotals).forEach(total => {
+      if (total <= monthlyBudget) monthsWithinBudget++;
+    });
+
+    // Budget Master badge (id 4, index 3): Stayed within budget for 12 months
+    const budgetMasterBadgeIndex = achievements.findIndex(a => a.title === "Budget Master");
+    if (budgetMasterBadgeIndex !== -1) {
+      if (monthsWithinBudget >= 12 && !updatedAchievements[budgetMasterBadgeIndex].earned) {
+        updatedAchievements[budgetMasterBadgeIndex].earned = true;
+        hasUpdates = true;
+      } else if (monthsWithinBudget < 12 && updatedAchievements[budgetMasterBadgeIndex].earned) {
+        updatedAchievements[budgetMasterBadgeIndex].earned = false;
+        hasUpdates = true;
+      }
+    }
+
+    // ...other achievement checks (Savings Champion, Goal Achiever, First Month)...
+
+    if (hasUpdates) {
+      setAchievements(updatedAchievements);
+    }
+  };
+
+  // Helper to calculate savings rate for each of the last 6 months
+const calculateSavingsChampion = (expenses, monthlyIncome) => {
+  if (!monthlyIncome || expenses.length < 6) return false;
+  // Group expenses by month
+  const monthlyTotals = {};
+  expenses.forEach((exp) => {
+    const date = new Date(exp.date);
+    const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+    monthlyTotals[key] = (monthlyTotals[key] || 0) + Number(exp.amount);
+  });
+  // Get last 6 months keys
+  const sortedMonths = Object.keys(monthlyTotals).sort((a, b) => new Date(a) - new Date(b));
+  const last6 = sortedMonths.slice(-6);
+  // Calculate savings rate for each month
+  let allAbove60 = true;
+  last6.forEach(monthKey => {
+    const spent = monthlyTotals[monthKey];
+    const saved = monthlyIncome - spent;
+    const rate = (saved / monthlyIncome) * 100;
+    if (rate < 60) allAbove60 = false;
+  });
+  return last6.length === 6 && allAbove60;
+};
+
+  const calculateBudgetProgress = async () => {
+    const username = localStorage.getItem('username');
+    let userExpenses = [];
+    try {
+      if (username) {
+        const res = await axios.get(`http://localhost:5000/api/expenses/user/${encodeURIComponent(username)}`);
+        userExpenses = res.data || [];
+      }
+    } catch (err) {
+      // handle error
+    }
+
+    // Group expenses by month
+    const monthlyTotals = {};
+    userExpenses.forEach((exp) => {
+      const date = new Date(exp.date);
+      const key = `${date.getFullYear()}-${date.getMonth() + 1}`;
+      monthlyTotals[key] = (monthlyTotals[key] || 0) + Number(exp.amount);
+    });
+
+    // Assume monthlyBudget is 80% of monthlyIncome if not set
+    const monthlyBudget = user.monthlyBudget || user.monthlyIncome * 0.8;
+    let monthsWithinBudget = 0;
+    Object.values(monthlyTotals).forEach(total => {
+      if (total <= monthlyBudget) monthsWithinBudget++;
+    });
+
+    setBudgetMonths(monthsWithinBudget);
+
+    // Progress: % of months within budget (out of 12)
+    const progress = Math.min((monthsWithinBudget / 12) * 100, 100);
+    setBudgetProgress(progress);
   };
 
   // Fetch user profile from backend, fallback to localStorage if not found
@@ -143,16 +359,23 @@ const Profile = () => {
   };
 
   const loadAchievements = () => {
-    const savedAchievements = localStorage.getItem('achievements');
-    if (savedAchievements) {
-      setAchievements(JSON.parse(savedAchievements));
-    }
-  };
+  const savedAchievements = localStorage.getItem('achievements');
+  if (savedAchievements) {
+    setAchievements(JSON.parse(savedAchievements));
+  }
+};
+
+
+
 
   const loadSettings = () => {
+    // Check if settings exist in localStorage, if not, use defaults (enabled)
+    const emailNotifications = localStorage.getItem('emailNotifications');
+    const mobileNotifications = localStorage.getItem('mobileNotifications');
+    
     const savedSettings = {
-      emailNotifications: localStorage.getItem('emailNotifications') === 'true',
-      mobileNotifications: localStorage.getItem('mobileNotifications') === 'true',
+      emailNotifications: emailNotifications !== null ? emailNotifications === 'true' : true,
+      mobileNotifications: mobileNotifications !== null ? mobileNotifications === 'true' : true,
     };
     setSettings(savedSettings);
   };
@@ -596,69 +819,332 @@ const Profile = () => {
                   <TabButton id="settings" label="Settings" isActive={activeTab === 'settings'} onClick={setActiveTab} />
                 </div>
               </div>
+
               {/* Tab Content */}
+
               {activeTab === 'financial' && (
-                <div className="tab-content">
-                  {/* Only show the progress bar */}
-                  <div className="goal-progress-card">
-                    <div className="goal-header">
-                      <Target className="goal-icon" />
-                      <h3 className="goal-title">Financial Goal Progress</h3>
+                <div className="tab-content" style={{ display: 'flex', flexDirection: 'column', gap: '25px' }}>
+                  <>
+                    {/* Annual Savings Progress (based on categories) */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                      borderRadius: '15px',
+                      padding: '25px',
+                      color: 'white',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.1)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+                        <Target size={28} />
+                        <h3 style={{ margin: 0, fontSize: '24px' }}>Annual Savings Progress</h3>
+                      </div>
+                      <div style={{ fontSize: '18px', opacity: 0.9, marginBottom: 8 }}>Progress</div>
+                      <div style={{ fontSize: '22px', fontWeight: 'bold', marginBottom: 8 }}>
+                        ₹{financialData.totalSavings?.toLocaleString() || 0} / ₹{user.annualSavingsAmount ? user.annualSavingsAmount.toLocaleString() : '0'}
+                      </div>
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '30px', marginBottom: '10px' }}>
+                      <div>
+                        <div style={{ fontSize: 15, opacity: 0.8 }}>Annual Income</div>
+                        <div style={{ fontWeight: 600, fontSize: 18 }}>
+                          ₹{user.monthlyIncome ? (user.monthlyIncome * 12).toLocaleString() : 0}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, opacity: 0.8 }}>Total Expenses (All Categories)</div>
+                        <div style={{ fontWeight: 600, fontSize: 18, color: '#ef4444' }}>
+                          ₹{financialData.totalCategoryExpenses?.toLocaleString() || 0}
+                        </div>
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, opacity: 0.8 }}>Savings</div>
+                        <div style={{ fontWeight: 600, fontSize: 18, color: '#10b981' }}>
+                          ₹{financialData.totalSavings?.toLocaleString() || 0}
+                        </div>
+                      </div>
                     </div>
-                    <div className="goal-content">
-                      <div className="goal-stats">
-                        <span className="goal-stat-label">Annual Savings Goal</span>
-                        <span className="goal-stat-value">
-                          ₹{financialData.totalSaved.toLocaleString()} / ₹{user.annualSavingsAmount ? user.annualSavingsAmount.toLocaleString() : '0'}
+                    {/* Progress Bar */}
+                    <div style={{
+                      background: 'rgba(255,255,255,0.2)',
+                      borderRadius: '10px',
+                      height: '18px',
+                      overflow: 'hidden',
+                      marginBottom: '10px',
+                      position: 'relative'
+                    }}>
+                      <div style={{
+                        background: (user.annualSavingsAmount > 0 &&
+                          financialData.totalSavings >= 0)
+                          ? '#10b981'
+                          : 'linear-gradient(90deg, #10b981, #34d399)',
+                        height: '100%',
+                        width: `${
+                          user.annualSavingsAmount > 0
+                            ? Math.min(
+                                100,
+                                (financialData.totalSavings / user.annualSavingsAmount) * 100
+                              )
+                            : 0
+                        }%`,
+                        transition: 'width 0.5s ease'
+                      }} />
+                      <span style={{
+                        position: 'absolute',
+                        right: 12,
+                        top: 0,
+                        color: '#fff',
+                        fontWeight: 700,
+                        fontSize: 14
+                      }}>
+                        {user.annualSavingsAmount > 0
+                          ? `${Math.min(
+                              100,
+                              (financialData.totalSavings / user.annualSavingsAmount) * 100
+                            ).toFixed(1)}%`
+                          : '0.0%'}
                       </span>
-                      </div>
-                      <div className="progress-bar">
-                        <div 
-                          className="progress-fill"
-                          style={{ 
-                            width: `${user.annualSavingsAmount > 0 ? (financialData.totalSaved / user.annualSavingsAmount) * 100 : 0}%` 
-                          }}
-                        />
-                      </div>
-                      {user.financialGoal && (
-                        <p className="goal-description">{user.financialGoal}</p>
+                    </div>
+                    <div style={{ fontSize: '15px', marginBottom: 4 }}>
+                      {(user.monthlyIncome > 0) && (
+                        <>
+                          {financialData.totalSavings < 0
+                            ? <>You have overspent by <b>₹{Math.abs(financialData.totalSavings).toLocaleString()}</b>.</>
+                            : <span style={{ color: '#22c55e', fontWeight: 600 }}>🎉 Good job! You are saving money.</span>
+                          }
+                        </>
                       )}
                     </div>
-                  </div>
-                </div>
-              )}
-              {activeTab === 'achievements' && (
-                <div className="achievements-card">
-                  <div className="achievements-header">
-                    <Award className="achievements-icon" />
-                    <h3 className="achievements-title">Achievements</h3>
-                  </div>
-                  <div className="achievements-grid">
-                    {achievements.filter(a => a.earned).length === 0 ? (
-                      <div style={{ color: "#888", fontStyle: "italic", padding: "2rem", textAlign: "center", width: "100%" }}>
-                        No badges earned yet.
+                      {user.financialGoal && (
+                        <p style={{ margin: '15px 0 0 0', opacity: 0.9, fontStyle: 'italic' }}>"{user.financialGoal}"</p>
+                      )}
+                    </div>
+                    {/* Budget Adherence (Last 12 Months) - Styled like Annual Savings Goal */}
+                    <div style={{
+                      background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                      borderRadius: '15px',
+                      padding: '25px',
+                      color: 'white',
+                      boxShadow: '0 10px 30px rgba(0,0,0,0.1)'
+                    }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '20px' }}>
+                        <DollarSign size={24} color="#fff" />
+                        <h3 style={{ margin: 0, fontSize: '24px' }}>Budget Adherence (Last 12 Months)</h3>
                       </div>
-                    ) : (
-                      achievements.filter(a => a.earned).map((achievement) => (
-                        <div 
-                          key={achievement.id} 
-                          className={`achievement-item achievement-earned`}
-                          title={achievement.description}
-                        >
-                          <div className="achievement-content">
-                            <div className="achievement-icon">{achievement.icon}</div>
-                            <div className="achievement-info">
-                              <h4 className="achievement-name">{achievement.title}</h4>
-                              <p className="achievement-desc">{achievement.description}</p>
-                              <div className="achievement-status">✓ Earned</div>
-                            </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '15px' }}>
+                        <span style={{ fontSize: '18px', opacity: 0.9 }}>Months Within Budget</span>
+                        <span style={{ fontSize: '20px', fontWeight: 'bold', color: '#fff' }}>
+                          {budgetMonths} / 12
+                        </span>
+                      </div>
+                      <div style={{
+                        background: 'rgba(255,255,255,0.2)',
+                        borderRadius: '10px',
+                        height: '12px',
+                        overflow: 'hidden',
+                        marginBottom: '10px'
+                      }}>
+                        <div style={{
+                          background: 'linear-gradient(90deg, #10b981, #34d399)',
+                          height: '100%',
+                          width: `${budgetProgress}%`,
+                          transition: 'width 0.5s ease'
+                        }} />
+                      </div>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '14px', opacity: 0.9 }}>
+                        <span>{budgetProgress.toFixed(1)}% Adherence</span>
+                        <span>Earn the <b>Budget Master</b> badge at 12/12!</span>
+                      </div>
+                      <p style={{ margin: '15px 0 0 0', color: '#e0e7ff', fontSize: '14px' }}>
+                        Stay within your monthly budget for 12 months to earn the <b>Budget Master</b> badge!
+                      </p>
+                    </div>
+                    {/* Data Export */}
+                    <div className="setting-item">
+                      <div className="setting-info">
+                        <div className="setting-icon">
+                          <Download size={20} />
+                        </div>
+                        <div className="setting-content">
+                          <div className="setting-text">
+                            <h4 className="setting-name">Data Export</h4>
+                            <p className="setting-desc">Download your profile and financial data</p>
+                          </div>
+                          <div className="export-buttons">
+                            <button 
+                              onClick={() => exportData('csv')}
+                              className={`toggle-btn toggle-active`}
+                              style={{minWidth: 120}}
+                            >
+                              Export as CSV
+                            </button>
+                            <button 
+                              onClick={() => exportData('excel')}
+                              className={`toggle-btn toggle-active`}
+                              style={{minWidth: 120}}
+                            >
+                              Export as Excel
+                            </button>
                           </div>
                         </div>
-                      ))
-                    )}
-                  </div>
+                      </div>
+                    </div>
+            
+                  </>
                 </div>
               )}
+              
+             {activeTab === 'achievements' && (() => {
+  // Default achievements with "First Login" earned initially
+
+
+  return (
+    <div className="achievements-card" style={{
+      background: 'white',
+      borderRadius: '15px',
+      padding: '25px',
+      boxShadow: '0 5px 20px rgba(0,0,0,0.1)'
+    }}>
+      {/* Header */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: '15px', marginBottom: '25px' }}>
+        <Award size={28} color="#667eea" />
+        <h3 style={{ margin: 0, color: '#333', fontSize: '24px' }}>Your Achievements</h3>
+      </div>
+
+      {/* Earned and Locked Badges */}
+      {earnedBadges.length === 0 && lockedBadges.length === 0 ? (
+        <div style={{
+          color: '#888',
+          fontStyle: 'italic',
+          padding: '2rem',
+          textAlign: 'center'
+        }}>
+          No badges earned yet.
+        </div>
+      ) : (
+        <>
+          {/* Earned Badges */}
+          {earnedBadges.length > 0 && (
+            <>
+              <h4 style={{ margin: '20px 0 10px', color: '#333' }}>Unlocked Badges</h4>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: '20px'
+              }}>
+                {earnedBadges.map((achievement) => (
+                  <div key={achievement.id} style={{
+                    background: 'linear-gradient(135deg, #667eea, #764ba2)',
+                    borderRadius: '15px',
+                    padding: '20px',
+                    color: 'white',
+                    transform: 'scale(1.02)',
+                    boxShadow: '0 10px 30px rgba(102, 126, 234, 0.3)',
+                    transition: 'all 0.3s ease'
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '15px' }}>
+                      <div style={{ fontSize: '32px', flexShrink: 0 }}>{achievement.icon}</div>
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 'bold' }}>
+                          {achievement.title}
+                        </h4>
+                        <p style={{ margin: '0 0 12px 0', fontSize: '14px', opacity: 0.9, lineHeight: '1.4' }}>
+                          {achievement.description}
+                        </p>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          fontSize: '12px',
+                          fontWeight: 'bold'
+                        }}>
+                          <CheckCircle size={16} />
+                          <span>Earned</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+
+          {/* Locked Badges */}
+          {lockedBadges.length > 0 && (
+            <>
+              <h4 style={{ margin: '30px 0 10px', color: '#666' }}>Locked Badges</h4>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(300px, 1fr))',
+                gap: '20px'
+              }}>
+                {lockedBadges.map((achievement) => (
+                  <div key={achievement.id} style={{
+                    background: 'linear-gradient(135deg, #f3f4f6, #e5e7eb)',
+                    borderRadius: '15px',
+                    padding: '20px',
+                    color: '#666',
+                    transform: 'scale(1)',
+                    boxShadow: '0 5px 15px rgba(0,0,0,0.1)',
+                    transition: 'all 0.3s ease',
+                    opacity: 0.7
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'flex-start', gap: '15px' }}>
+                      <div style={{ fontSize: '32px', flexShrink: 0 }}>{achievement.icon}</div>
+                      <div style={{ flex: 1 }}>
+                        <h4 style={{ margin: '0 0 8px 0', fontSize: '18px', fontWeight: 'bold' }}>
+                          {achievement.title}
+                        </h4>
+                        <p style={{ margin: '0 0 12px 0', fontSize: '14px', opacity: 0.9, lineHeight: '1.4' }}>
+                          {achievement.description}
+                        </p>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: '8px',
+                          fontSize: '12px',
+                          fontWeight: 'bold'
+                        }}>
+                          <Trophy size={16} />
+                          <span>Not earned yet</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </>
+          )}
+        </>
+      )}
+
+      {/* Achievement Stats */}
+      <div style={{
+        marginTop: '30px',
+        padding: '20px',
+        background: 'linear-gradient(135deg, #f8fafc, #e2e8f0)',
+        borderRadius: '15px',
+        display: 'flex',
+        justifyContent: 'center',
+        gap: '40px'
+      }}>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#667eea' }}>
+            {earnedBadges.length}
+          </div>
+          <div style={{ color: '#666', fontSize: '14px' }}>Badges Earned</div>
+        </div>
+        <div style={{ textAlign: 'center' }}>
+          <div style={{ fontSize: '28px', fontWeight: 'bold', color: '#667eea' }}>
+            {achievements.length > 0
+              ? Math.round((earnedBadges.length / achievements.length) * 100)
+              : 0}%
+          </div>
+          <div style={{ color: '#666', fontSize: '14px' }}>Completion Rate</div>
+        </div>
+      </div>
+    </div>
+  );
+})()}
+
+
               {activeTab === 'settings' && (
                 <div className="settings-card">
                   <h3 className="settings-title">Account Settings</h3>
@@ -700,67 +1186,6 @@ const Profile = () => {
                           >
                             {settings.mobileNotifications ? 'Enabled' : 'Disabled'}
                           </button>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Data Export */}
-                    <div className="setting-item">
-                      <div className="setting-info">
-                        <div className="setting-icon">
-                          <Download size={20} />
-                        </div>
-                        <div className="setting-content">
-                          <div className="setting-text">
-                            <h4 className="setting-name">Data Export</h4>
-                            <p className="setting-desc">Download your profile and financial data</p>
-                          </div>
-                          <div className="export-buttons">
-                            <button 
-                              onClick={() => exportData('csv')}
-                              className={`toggle-btn toggle-active`}
-                              style={{minWidth: 120}}
-                            >
-                              Export as CSV
-                            </button>
-                            <button 
-                              onClick={() => exportData('excel')}
-                              className={`toggle-btn toggle-active`}
-                              style={{minWidth: 120}}
-                            >
-                              Export as Excel
-                            </button>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                    {/* Badges */}
-                    <div className="setting-item">
-                      <div className="setting-info">
-                        <div className="setting-icon">
-                          <Award size={20} />
-                        </div>
-                        <div className="setting-content">
-                          <div className="setting-text">
-                            <h4 className="setting-name">Badges</h4>
-                            <p className="setting-desc">Your progress badges</p>
-                          </div>
-                          <div className="achievements-grid settings-badges-grid">
-                            {achievements.map((achievement) => (
-                              <div 
-                                key={achievement.id} 
-                                className={`achievement-item settings-badge-card`}
-                                title={achievement.description}
-                              >
-                                <div className="achievement-content">
-                                  <div className="achievement-icon">{achievement.icon}</div>
-                                  <div className="achievement-info">
-                                    <h4 className="achievement-name">{achievement.title}</h4>
-                                    <p className="achievement-desc">{achievement.description}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            ))}
-                          </div>
                         </div>
                       </div>
                     </div>

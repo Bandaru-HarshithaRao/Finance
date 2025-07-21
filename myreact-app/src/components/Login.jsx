@@ -9,6 +9,58 @@ function Login() {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
 
+  // Default achievements structure
+  const defaultAchievements = [
+    {
+      id: 1,
+      title: "First Login",
+      description: "Earned on your first day of login.",
+      earned: false,
+      icon: "🎉"
+    },
+    {
+      id: 2,
+      title: "Day 1 Completed",
+      description: "Unlocked after completing your first day.",
+      earned: false,
+      icon: "✅"
+    },
+    {
+      id: 3,
+      title: "Expense Tracker Beginner",
+      description: "Add your first expense to earn this badge.",
+      earned: false,
+      icon: "💰"
+    },
+    {
+      id: 4,
+      title: "Budget Master",
+      description: "Set your first budget to unlock this badge.",
+      earned: false,
+      icon: "📊"
+    },
+    {
+      id: 5,
+      title: "Finance Streak",
+      description: "Log in for 7 consecutive days.",
+      earned: false,
+      icon: "🔥"
+    }
+  ];
+
+  // Unlock the First Login badge and save to localStorage
+  const unlockFirstLoginBadge = () => {
+    let savedAchievements = JSON.parse(localStorage.getItem('achievements')) || defaultAchievements;
+
+    // Mark the First Login badge as earned
+    savedAchievements = savedAchievements.map(badge =>
+      badge.id === 1 ? { ...badge, earned: true } : badge
+    );
+
+    // Save back to localStorage
+    localStorage.setItem('achievements', JSON.stringify(savedAchievements));
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -26,20 +78,24 @@ function Login() {
       const data = await response.json();
 
       if (response.ok) {
-        // Store user information in localStorage for Categories component
-        localStorage.setItem('userIdentifier', identifier); // Used by Categories component
-        localStorage.setItem('username', data.username);    // Actual username from database
-        localStorage.setItem('isLoggedIn', 'true');         // Login status
-        localStorage.setItem('user', identifier);           // Keep your original storage for compatibility
+        // Save user details in localStorage
+        localStorage.setItem('userIdentifier', identifier);
+        localStorage.setItem('username', data.username);
+        localStorage.setItem('isLoggedIn', 'true');
+        localStorage.setItem('user', identifier);
+        localStorage.setItem('userEmail', data.email);
+        localStorage.setItem('userName', data.fullName);
+        localStorage.setItem('userPhone', data.phoneNumber);
+        localStorage.setItem('userMonthlyIncome', data.monthlyIncome);
+
+        // Unlock "First Login" badge
+        unlockFirstLoginBadge();
 
         setMessage('✅ Login successful! Redirecting...');
-        localStorage.setItem('userEmail', data.email);
-        localStorage.setItem('userName', data.fullName); // or data.name, depending on your backend
-        localStorage.setItem('userPhone', data.phoneNumber); // or data.phone
-        localStorage.setItem('userMonthlyIncome', data.monthlyIncome);
-        // Small delay to show success message
+        
+        // Redirect after a short delay
         setTimeout(() => {
-          navigate('/'); // Redirect to home page
+          navigate('/');
         }, 1000);
       } else {
         setMessage('❌ Invalid username or password, try logging in again!');
@@ -93,7 +149,7 @@ function Login() {
         <p className="signup-text">
           Don't have an account? <Link to="/register">Sign up</Link>
         </p>
-        
+
         <p className="signup-text">
           <Link to="/">← Back to Home Page</Link>
         </p>
